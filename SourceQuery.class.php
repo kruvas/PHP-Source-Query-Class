@@ -7,16 +7,13 @@ class SourceQuery
 	 * GitHub: https://github.com/xPaw/PHP-Source-Query-Class
 	 *
 	 ********************************************************************************
-	 * KNOWN BUGS:
-	 * - Invalid packets or GetRules() breaks answers from HLTV, need workaround
-	 *
 	 * INFORMATION:
 	 * - If server is HLTV, bots == spectators (You can know that by comparing 'Dedicated' == 'p')
 	 * - GetPlayers() for HLTV returns players on game server, and their time will be always 1 second
 	 * - Source RCON uses TCP, so it requires different connection and protocol for it
 	 ********************************************************************************/
 	
-	protected $resource;
+	protected $Resource;
 	protected $Connected;
 	protected $RconPassword;
 	protected $RconChallenge;
@@ -38,15 +35,21 @@ class SourceQuery
 		$this->IsSource      = 0;
 		$this->RconId        = 0;
 		
-		if( ( $this->resource = @FSockOpen( 'udp://' . GetHostByName( $Ip ), (int)$Port ) ) )
+		if( ( $this->Resource = @FSockOpen( 'udp://' . GetHostByName( $Ip ), (int)$Port ) ) )
 		{
 			$this->Connected = true;
-			Socket_Set_TimeOut( $this->resource, 3 );
+			Socket_Set_TimeOut( $this->Resource, 3 );
 			
-			$this->Ping( );
-			
-		//	if( !$this->Ping( ) ) // TODO: Ping does not work in TF2
-		//		$this->Disconnect( );
+		/*	if( !$this->Ping( ) ) // TODO: Ping does not work in TF2
+			{
+				$this->Disconnect( );
+				
+				throw new SQueryException( "This server is not responding to Source Query Protocol." );
+			}	*/
+		}
+		else
+		{
+			throw new SQueryException( "Can't connect to the server." );
 		}
 		
 		return $this->Connected;
@@ -58,7 +61,7 @@ class SourceQuery
 		{
 			$this->Connected = false;
 			
-			FClose( $this->resource );
+			FClose( $this->Resource );
 		}
 	}
 	
@@ -75,42 +78,6 @@ class SourceQuery
 		}
 		
 		return false;
-	}
-	
-	public function GetPlayers( )
-	{
-		if( !$this->Connected )
-		{
-			return false;
-		}
-		
-		$this->WriteData( 'U' . $this->GetChallenge( ) );
-		$Buffer = $this->ReadData( );
-		
-		if( $this->_CutByte( $Buffer, 5 ) != "\xFF\xFF\xFF\xFFD" )
-		{
-			return false;
-		}
-		
-		$Count = Ord( $this->_CutByte( $Buffer ) );
-		
-		if( $Count <= 0 ) // No players
-		{
-			return false;
-		}
-		
-		for( $i = 0; $i < $Count; $i++ )
-		{
-			$this->_CutByte( $Buffer ); // player id, but always equals to 0 (tested on HL1)
-			
-			$Players[ $i ][ 'Name' ]    = $this->_CutString( $Buffer );
-			$Players[ $i ][ 'Frags' ]   = $this->_UnPack( 'L', $this->_CutByte( $Buffer, 4 ) );
-			$Time                       = (int)$this->_UnPack( 'f', $this->_CutByte( $Buffer, 4 ) );
-			$Players[ $i ][ 'IntTime' ] = $Time;
-			$Players[ $i ][ 'Time' ]    = GMDate( ( $Time > 3600 ? "H:i:s" : "i:s" ), $Time );
-		}
-		
-		return $Players;
 	}
 	
 	public function GetInfo( )
@@ -135,30 +102,32 @@ class SourceQuery
 				$Server[ 'Map' ]        = $this->_CutString( $Buffer );
 				$Server[ 'ModDir' ]     = $this->_CutString( $Buffer );
 				$Server[ 'ModDesc' ]    = $this->_CutString( $Buffer );
-				$Server[ 'Players' ]    = Ord( $this->_CutByte( $Buffer ) );
-				$Server[ 'MaxPlayers' ] = Ord( $this->_CutByte( $Buffer ) );
-				$Server[ 'Protocol' ]   = Ord( $this->_CutByte( $Buffer ) );
+				$Server[ 'Players' ]    = $this->_CutNumber( $Buffer );
+				$Server[ 'MaxPlayers' ] = $this->_CutNumber( $Buffer );
+				$Server[ 'Protocol' ]   = $this->_CutNumber( $Buffer );
 				$Server[ 'Dedicated' ]  = $this->_CutByte( $Buffer );
 				$Server[ 'Os' ]         = $this->_CutByte( $Buffer );
-				$Server[ 'Password' ]   = Ord( $this->_CutByte( $Buffer ) );
-				$Server[ 'IsMod' ]      = Ord( $this->_CutByte( $Buffer ) );
+				$Server[ 'Password' ]   = $this->_CutNumber( $Buffer );
+				$Server[ 'IsMod' ]      = $this->_CutNumber( $Buffer );
 				
 				if( $Server[ 'IsMod' ] ) // TODO: Needs testing
 				{
 					$Mod[ 'Url' ]        = $this->_CutString( $Buffer );
 					$Mod[ 'Download' ]   = $this->_CutString( $Buffer );
 					$this->_CutByte( $Buffer ); // NULL byte
-					$Mod[ 'Version' ]    = Ord( $this->_CutByte( $Buffer ) );
-					$Mod[ 'Size' ]       = Ord( $this->_CutByte( $Buffer ) );
-					$Mod[ 'ServerSide' ] = Ord( $this->_CutByte( $Buffer ) );
-					$Mod[ 'CustomDLL' ]  = Ord( $this->_CutByte( $Buffer ) );
+					$Mod[ 'Version' ]    = $this->_CutNumber( $Buffer ); // TODO: long?
+					$Mod[ 'Size' ]       = $this->_CutNumber( $Buffer ); // TODO: long?
+					$Mod[ 'ServerSide' ] = $this->_CutNumber( $Buffer );
+					$Mod[ 'CustomDLL' ]  = $this->_CutNumber( $Buffer );
 				}
 				
-				$Server[ 'Secure' ]   = Ord( $this->_CutByte( $Buffer ) );
-				$Server[ 'Bots' ]     = Ord( $this->_CutByte( $Buffer ) );
+				$Server[ 'Secure' ]   = $this->_CutNumber( $Buffer );
+				$Server[ 'Bots' ]     = $this->_CutNumber( $Buffer );
 				
 				if( isset( $Mod ) )
+				{
 					$Server[ 'Mod' ] = $Mod;
+				}
 				
 				return $Server;
 			}
@@ -166,31 +135,31 @@ class SourceQuery
 			return false;
 		}
 		
-		$Server[ 'Protocol' ]   = Ord( $this->_CutByte( $Buffer ) );
+		$Server[ 'Protocol' ]   = $this->_CutNumber( $Buffer );
 		$Server[ 'HostName' ]   = $this->_CutString( $Buffer );
 		$Server[ 'Map' ]        = $this->_CutString( $Buffer );
 		$Server[ 'ModDir' ]     = $this->_CutString( $Buffer );
 		$Server[ 'ModDesc' ]    = $this->_CutString( $Buffer );
 		$Server[ 'AppID' ]      = $this->_UnPack( 'S', $this->_CutByte( $Buffer, 2 ) );
-		$Server[ 'Players' ]    = Ord( $this->_CutByte( $Buffer ) );
-		$Server[ 'MaxPlayers' ] = Ord( $this->_CutByte( $Buffer ) );
-		$Server[ 'Bots' ]       = Ord( $this->_CutByte( $Buffer ) );
+		$Server[ 'Players' ]    = $this->_CutNumber( $Buffer );
+		$Server[ 'MaxPlayers' ] = $this->_CutNumber( $Buffer );
+		$Server[ 'Bots' ]       = $this->_CutNumber( $Buffer );
 		$Server[ 'Dedicated' ]  = $this->_CutByte( $Buffer );
 		$Server[ 'Os' ]         = $this->_CutByte( $Buffer );
-		$Server[ 'Password' ]   = Ord( $this->_CutByte( $Buffer ) );
-		$Server[ 'Secure' ]     = Ord( $this->_CutByte( $Buffer ) );
+		$Server[ 'Password' ]   = $this->_CutNumber( $Buffer );
+		$Server[ 'Secure' ]     = $this->_CutNumber( $Buffer );
 		
 		if( $Server[ 'AppID' ] == 2400 ) // The Ship
 		{
-			$Server[ 'GameMode' ]     = Ord( $this->_CutByte( $Buffer ) );
-			$Server[ 'WitnessCount' ] = Ord( $this->_CutByte( $Buffer ) );
-			$Server[ 'WitnessTime' ]  = Ord( $this->_CutByte( $Buffer ) );
+			$Server[ 'GameMode' ]     = $this->_CutNumber( $Buffer );
+			$Server[ 'WitnessCount' ] = $this->_CutNumber( $Buffer );
+			$Server[ 'WitnessTime' ]  = $this->_CutNumber( $Buffer );
 		}
 		
 		$Server[ 'Version' ] = $this->_CutString( $Buffer );
 		
 		// EXTRA DATA FLAGS
-		$Flags = Ord( $this->_CutByte( $Buffer ) );
+		$Flags = $this->_CutNumber( $Buffer );
 		
 		if( $Flags & 0x80 ) // The server's game port #
 		{
@@ -222,6 +191,49 @@ class SourceQuery
 		return $Server;
 	}
 	
+	public function GetPlayers( )
+	{
+		if( !$this->Connected )
+		{
+			return false;
+		}
+		
+		$Challenge = $this->GetChallenge( );
+		
+		if( !$Challenge )
+		{
+			return false;
+		}
+		
+		$this->WriteData( 'U' . $Challenge );
+		$Buffer = $this->ReadData( );
+		
+		if( $this->_CutByte( $Buffer, 5 ) != "\xFF\xFF\xFF\xFFD" )
+		{
+			return false;
+		}
+		
+		$Count = $this->_CutNumber( $Buffer );
+		
+		if( $Count <= 0 ) // No players
+		{
+			return false;
+		}
+		
+		for( $i = 0; $i < $Count; $i++ )
+		{
+			$this->_CutByte( $Buffer ); // player id, but always equals to 0 (tested on HL1)
+			
+			$Players[ $i ][ 'Name' ]    = $this->_CutString( $Buffer );
+			$Players[ $i ][ 'Frags' ]   = $this->_UnPack( 'L', $this->_CutByte( $Buffer, 4 ) );
+			$Time                       = (int)$this->_UnPack( 'f', $this->_CutByte( $Buffer, 4 ) );
+			$Players[ $i ][ 'IntTime' ] = $Time;
+			$Players[ $i ][ 'Time' ]    = GMDate( ( $Time > 3600 ? "H:i:s" : "i:s" ), $Time );
+		}
+		
+		return $Players;
+	}
+	
 	public function GetRules( )
 	{
 		if( !$this->Connected )
@@ -229,7 +241,14 @@ class SourceQuery
 			return false;
 		}
 		
-		$this->WriteData( 'V' . $this->GetChallenge( ) );
+		$Challenge = $this->GetChallenge( );
+		
+		if( !$Challenge )
+		{
+			return false;
+		}
+		
+		$this->WriteData( 'V' . $Challenge );
 		$Buffer = $this->ReadData( );
 		
 		if( $this->_CutByte( $Buffer, 5 ) != "\xFF\xFF\xFF\xFFE" )
@@ -266,12 +285,13 @@ class SourceQuery
 			$this->WriteData( 'challenge rcon' );
 			$Data = $this->ReadData( );
 			
-			if( $Data && $Data[ 4 ] != 'c' )
+			if( $this->_CutByte( $Data, 5 ) != "\xFF\xFF\xFF\xFFc" )
 			{
 				return false;
 			}
 			
-			return ( $this->RconChallenge = RTrim( SubStr( $Data, 19 ) ) );
+			// TODO: Check is RTrim is needed here
+			return ( $this->RconChallenge = RTrim( SubStr( $Data, 14 ) ) );
 		}
 		else if( $this->Challenge )
 		{
@@ -281,21 +301,14 @@ class SourceQuery
 		$this->WriteData( "\x55\xFF\xFF\xFF\xFF" );
 		$Data = $this->ReadData( );
 		
-		if( $Data && $Data[ 4 ] != 'A' )
+		// TODO: \x55 on HLTV just returns server info, breaking other packets...
+		
+		if( $this->_CutByte( $Data, 5 ) != "\xFF\xFF\xFF\xFFA" ) // dproto/hltv will return 'D' not 'A' here
 		{
-			if( $Data[ 4 ] == 'D' )
-			{
-				// dproto does not check challenge, and it instantly sends player list
-				
-				throw new SQueryException( "dproto is doing it wrong" );
-			}
-			
 			return false;
 		}
 		
-		$this->Challenge = SubStr( $Data, 5 );
-		
-		return $this->Challenge;
+		return ( $this->Challenge = $Data );
 	}
 	
 	// ==========================================================
@@ -323,11 +336,11 @@ class SourceQuery
 		
 		$this->WriteData( 'rcon ' . $this->RconChallenge . ' "' . $this->RconPassword . '" ' . $Command );
 		
-		Socket_Set_TimeOut( $this->resource, 1 );
+		Socket_Set_TimeOut( $this->Resource, 1 );
 		
 		$Buffer = "";
 		
-		while( $Type = FRead( $this->resource, 5 ) )
+		while( $Type = FRead( $this->Resource, 5 ) )
 		{
 			if( Ord( $Type[ 0 ] ) == 254 ) // More than one datagram
 			{
@@ -335,14 +348,14 @@ class SourceQuery
 			}
 			else
 			{
-				$Status = Socket_Get_Status( $this->resource );
-				$Data   = FRead( $this->resource, $Status[ 'unread_bytes' ] );
+				$Status = Socket_Get_Status( $this->Resource );
+				$Data   = FRead( $this->Resource, $Status[ 'unread_bytes' ] );
 			}
 			
 			$Buffer .= RTrim( $Data, "\0" );
 		}
 		
-		Socket_Set_TimeOut( $this->resource, 3 );
+		Socket_Set_TimeOut( $this->Resource, 3 );
 		
 		return $Buffer;
 	}
@@ -353,18 +366,18 @@ class SourceQuery
 	{
 		$Command = "\xFF\xFF\xFF\xFF" . $Command . "\x00";
 		
-		return !!( !FWrite( $this->resource, $Command, StrLen( $Command ) ) );
+		return !!( !FWrite( $this->Resource, $Command, StrLen( $Command ) ) );
 	}
 	
 	private function ReadData( )
 	{
-		$Data = FRead( $this->resource, 1 );
+		$Data = FRead( $this->Resource, 1 );
 		
 		switch( Ord( $Data ) )
 		{
 			case 255: // Just one datagram
-				$Status = Socket_Get_Status( $this->resource );
-				$Data  .= FRead( $this->resource, $Status[ 'unread_bytes' ] );
+				$Status = Socket_Get_Status( $this->Resource );
+				$Data  .= FRead( $this->Resource, $Status[ 'unread_bytes' ] );
 				
 				break;
 			
@@ -393,10 +406,10 @@ class SourceQuery
 	
 	private function _ReadSplitPackets( $BytesToRead )
 	{
-		FRead( $this->resource, $BytesToRead );
+		FRead( $this->Resource, $BytesToRead );
 		
 		// The 9th byte tells us the datagram id and the total number of datagrams
-		$Data = FRead( $this->resource, 1 );
+		$Data = FRead( $this->Resource, 1 );
 		
 		// We need to evaluate this in bits (so convert to binary)
 		$Bits = SPrintF( "%08b", Ord( $Data ) );
@@ -408,23 +421,23 @@ class SourceQuery
 		$x = BinDec( SubStr( $Bits, 0, 4 ) );
 		
 		// The rest is the datagram content.
-		$Status = Socket_Get_Status( $this->resource );
-		$Datagrams[ $x ] = FRead( $this->resource, $Status[ 'unread_bytes' ] );
+		$Status = Socket_Get_Status( $this->Resource );
+		$Datagrams[ $x ] = FRead( $this->Resource, $Status[ 'unread_bytes' ] );
 		
 		// Repeat this process for each datagram
 		// We've already done the first one, so $i = 1 to start at the next
 		for( $i = 1; $i < $Count; $i++ )
 		{
 			// Skip the header.
-			FRead( $this->resource, 8 );
+			FRead( $this->Resource, 8 );
 			
 			// Evaluate the 9th byte.
-			$Data = FRead( $this->resource, 1 );
+			$Data = FRead( $this->Resource, 1 );
 			$x = BinDec( SubStr( SPrintF( "%08b", Ord( $Data ) ), 0, 4 ) );
 			
 			// Read the datagram content
-			$Status = Socket_Get_Status( $this->resource );
-			$Datagrams[ $x ] = FRead( $this->resource, $Status[ 'unread_bytes' ] );
+			$Status = Socket_Get_Status( $this->Resource );
+			$Datagrams[ $x ] = FRead( $this->Resource, $Status[ 'unread_bytes' ] );
 		}
 		
 		$Data = "";
@@ -434,6 +447,11 @@ class SourceQuery
 		}
 		
 		return $Data;
+	}
+	
+	private function _CutNumber( &$Buffer )
+	{
+		return Ord( $this->_CutByte( $Buffer ) );
 	}
 	
 	private function _CutByte( &$Buffer, $Length = 1 )
@@ -450,11 +468,15 @@ class SourceQuery
 		
 		if( $Length === FALSE )
 		{
-			$Length = StrLen( $Buffer );
+		//	$Length = StrLen( $Buffer );
+			
+			$String = $Buffer;
+			$Buffer = "";
 		}
-		
-		$String = SubStr( $Buffer, 0, $Length );
-		$Buffer = SubStr( $Buffer, $Length + 1 );
+		else
+		{
+			$String = $this->_CutByte( $Buffer, ++$Length );
+		}
 		
 		return $String;
 	}
