@@ -7,9 +7,10 @@
 	
 	try
 	{
-		$Query->Connect( 'localhost', 27015 /* , 'rcon password' */ );
+		$Query->Connect( 'localhost', 27015 );
 		
-	//	echo $Query->Rcon( 'version' );
+		$Query->SetRconPassword( 'w00t_rcon' );
+		echo $Query->Rcon( 'version' );
 		
 		print_r( $Query->GetInfo( ) );
 		print_r( $Query->GetPlayers( ) );
