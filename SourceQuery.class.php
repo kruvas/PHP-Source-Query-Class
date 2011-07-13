@@ -26,11 +26,11 @@ class SourceQuery
 		$this->Disconnect( );
 	}
 	
-	public function Connect( $Ip, $Port = 27015, $Password = "" )
+	public function Connect( $Ip, $Port = 27015 )
 	{
 		$this->Disconnect( );
-		$this->RconPassword  = $Password;
 		$this->RconChallenge = 0;
+		$this->RconPassword  = 0;
 		$this->Challenge     = 0;
 		$this->IsSource      = 0;
 		$this->RconId        = 0;
@@ -53,6 +53,33 @@ class SourceQuery
 		}
 		
 		return $this->Connected;
+	}
+	
+	public function SetRconPassword( $Password )
+	{
+		$this->RconPassword = $Password;
+		
+		if( $this->RconChallenge || !$Password )
+		{
+			return false;
+		}
+		
+		$this->WriteData( 'challenge rcon' );
+		$Data = $this->ReadData( );
+		
+		if( Empty( $Data ) )
+		{
+			// Little bit stupid workaround
+			$this->IsSource = true;
+		}
+		else if( $this->_CutByte( $Data, 18 ) != "\xFF\xFF\xFF\xFFchallenge rcon" )
+		{
+			return false;
+		}
+		
+		$this->RconChallenge = Trim( $Data );
+		
+		return true;
 	}
 	
 	public function Disconnect( )
@@ -88,105 +115,109 @@ class SourceQuery
 		}
 		
 		$this->WriteData( 'TSource Engine Query' );
-		$Buffer = $this->ReadData( );
+		$Data = $this->ReadData( );
 		
-		$Type = $this->_CutByte( $Buffer, 5 );
+		$Type = $this->_CutByte( $Data, 5 );
 		$Type = $Type[ 4 ];
 		
-		if( $Type != 'I' )
+		if( $Type == 'm' ) // Old GoldSrc protocol, HLTV still uses it
 		{
-			if( $Type == 'm' ) // Old HL1 protocol, HLTV uses it
+			$Server[ 'Address' ]    = $this->_CutString( $Data );
+			$Server[ 'HostName' ]   = $this->_CutString( $Data );
+			$Server[ 'Map' ]        = $this->_CutString( $Data );
+			$Server[ 'ModDir' ]     = $this->_CutString( $Data );
+			$Server[ 'ModDesc' ]    = $this->_CutString( $Data );
+			$Server[ 'Players' ]    = $this->_CutNumber( $Data );
+			$Server[ 'MaxPlayers' ] = $this->_CutNumber( $Data );
+			$Server[ 'Protocol' ]   = $this->_CutNumber( $Data );
+			$Server[ 'Dedicated' ]  = $this->_CutByte( $Data );
+			$Server[ 'Os' ]         = $this->_CutByte( $Data );
+			$Server[ 'Password' ]   = $this->_CutNumber( $Data );
+			$Server[ 'IsMod' ]      = $this->_CutNumber( $Data );
+			
+			if( $Server[ 'IsMod' ] ) // TODO: Needs testing
 			{
-				$Server[ 'Address' ]    = $this->_CutString( $Buffer );
-				$Server[ 'HostName' ]   = $this->_CutString( $Buffer );
-				$Server[ 'Map' ]        = $this->_CutString( $Buffer );
-				$Server[ 'ModDir' ]     = $this->_CutString( $Buffer );
-				$Server[ 'ModDesc' ]    = $this->_CutString( $Buffer );
-				$Server[ 'Players' ]    = $this->_CutNumber( $Buffer );
-				$Server[ 'MaxPlayers' ] = $this->_CutNumber( $Buffer );
-				$Server[ 'Protocol' ]   = $this->_CutNumber( $Buffer );
-				$Server[ 'Dedicated' ]  = $this->_CutByte( $Buffer );
-				$Server[ 'Os' ]         = $this->_CutByte( $Buffer );
-				$Server[ 'Password' ]   = $this->_CutNumber( $Buffer );
-				$Server[ 'IsMod' ]      = $this->_CutNumber( $Buffer );
-				
-				if( $Server[ 'IsMod' ] ) // TODO: Needs testing
-				{
-					$Mod[ 'Url' ]        = $this->_CutString( $Buffer );
-					$Mod[ 'Download' ]   = $this->_CutString( $Buffer );
-					$this->_CutByte( $Buffer ); // NULL byte
-					$Mod[ 'Version' ]    = $this->_CutNumber( $Buffer ); // TODO: long?
-					$Mod[ 'Size' ]       = $this->_CutNumber( $Buffer ); // TODO: long?
-					$Mod[ 'ServerSide' ] = $this->_CutNumber( $Buffer );
-					$Mod[ 'CustomDLL' ]  = $this->_CutNumber( $Buffer );
-				}
-				
-				$Server[ 'Secure' ]   = $this->_CutNumber( $Buffer );
-				$Server[ 'Bots' ]     = $this->_CutNumber( $Buffer );
-				
-				if( isset( $Mod ) )
-				{
-					$Server[ 'Mod' ] = $Mod;
-				}
-				
-				return $Server;
+				$Mod[ 'Url' ]        = $this->_CutString( $Data );
+				$Mod[ 'Download' ]   = $this->_CutString( $Data );
+				$this->_CutByte( $Data ); // NULL byte
+				$Mod[ 'Version' ]    = $this->_CutNumber( $Data );
+				$Mod[ 'Size' ]       = $this->_CutNumber( $Data );
+				$Mod[ 'ServerSide' ] = $this->_CutNumber( $Data );
+				$Mod[ 'CustomDLL' ]  = $this->_CutNumber( $Data );
 			}
 			
+			$Server[ 'Secure' ]   = $this->_CutNumber( $Data );
+			$Server[ 'Bots' ]     = $this->_CutNumber( $Data );
+			
+			if( isset( $Mod ) )
+			{
+				$Server[ 'Mod' ] = $Mod;
+			}
+			
+			return $Server;
+		}
+		else if( $Type != 'I' )
+		{
 			return false;
 		}
 		
-		$Server[ 'Protocol' ]   = $this->_CutNumber( $Buffer );
-		$Server[ 'HostName' ]   = $this->_CutString( $Buffer );
-		$Server[ 'Map' ]        = $this->_CutString( $Buffer );
-		$Server[ 'ModDir' ]     = $this->_CutString( $Buffer );
-		$Server[ 'ModDesc' ]    = $this->_CutString( $Buffer );
-		$Server[ 'AppID' ]      = $this->_UnPack( 'S', $this->_CutByte( $Buffer, 2 ) );
-		$Server[ 'Players' ]    = $this->_CutNumber( $Buffer );
-		$Server[ 'MaxPlayers' ] = $this->_CutNumber( $Buffer );
-		$Server[ 'Bots' ]       = $this->_CutNumber( $Buffer );
-		$Server[ 'Dedicated' ]  = $this->_CutByte( $Buffer );
-		$Server[ 'Os' ]         = $this->_CutByte( $Buffer );
-		$Server[ 'Password' ]   = $this->_CutNumber( $Buffer );
-		$Server[ 'Secure' ]     = $this->_CutNumber( $Buffer );
+		$Server[ 'Protocol' ]   = $this->_CutNumber( $Data );
+		$Server[ 'HostName' ]   = $this->_CutString( $Data );
+		$Server[ 'Map' ]        = $this->_CutString( $Data );
+		$Server[ 'ModDir' ]     = $this->_CutString( $Data );
+		$Server[ 'ModDesc' ]    = $this->_CutString( $Data );
+		$Server[ 'AppID' ]      = $this->_UnPack( 'S', $this->_CutByte( $Data, 2 ) );
+		$Server[ 'Players' ]    = $this->_CutNumber( $Data );
+		$Server[ 'MaxPlayers' ] = $this->_CutNumber( $Data );
+		$Server[ 'Bots' ]       = $this->_CutNumber( $Data );
+		$Server[ 'Dedicated' ]  = $this->_CutByte( $Data );
+		$Server[ 'Os' ]         = $this->_CutByte( $Data );
+		$Server[ 'Password' ]   = $this->_CutNumber( $Data );
+		$Server[ 'Secure' ]     = $this->_CutNumber( $Data );
 		
 		if( $Server[ 'AppID' ] == 2400 ) // The Ship
 		{
-			$Server[ 'GameMode' ]     = $this->_CutNumber( $Buffer );
-			$Server[ 'WitnessCount' ] = $this->_CutNumber( $Buffer );
-			$Server[ 'WitnessTime' ]  = $this->_CutNumber( $Buffer );
+			$Server[ 'GameMode' ]     = $this->_CutNumber( $Data );
+			$Server[ 'WitnessCount' ] = $this->_CutNumber( $Data );
+			$Server[ 'WitnessTime' ]  = $this->_CutNumber( $Data );
 		}
 		
-		$Server[ 'Version' ] = $this->_CutString( $Buffer );
+		$Server[ 'Version' ] = $this->_CutString( $Data );
 		
 		// EXTRA DATA FLAGS
-		$Flags = $this->_CutNumber( $Buffer );
+		$Flags = $this->_CutNumber( $Data );
 		
-		if( $Flags & 0x80 ) // The server's game port #
+		// The server's game port #
+		if( $Flags & 0x80 )
 		{
-			$Server[ 'EDF' ][ 'GamePort' ] = $this->_UnPack( 'S', $this->_CutByte( $Buffer, 2 ) );
+			$Server[ 'EDF' ][ 'GamePort' ] = $this->_UnPack( 'S', $this->_CutByte( $Data, 2 ) );
 		}
 		
-		if( $Flags & 0x10 ) // The server's SteamID
+		// The server's SteamID
+		if( $Flags & 0x10 )
 		{
 			// TODO: long long ...
-			
-			$this->_CutByte( $Buffer, 8 );
+			$this->_CutByte( $Data, 8 );
 		}
 		
-		if( $Flags & 0x40 ) // The spectator port # and then the spectator server name
+		// The spectator port # and then the spectator server name
+		if( $Flags & 0x40 )
 		{
-			$Server[ 'EDF' ][ 'SpecPort' ] = $this->_UnPack( 'S', $this->_CutByte( $Buffer, 2 ) );
-			$Server[ 'EDF' ][ 'SpecName' ] = $this->_CutString( $Buffer );
+			$Server[ 'EDF' ][ 'SpecPort' ] = $this->_UnPack( 'S', $this->_CutByte( $Data, 2 ) );
+			$Server[ 'EDF' ][ 'SpecName' ] = $this->_CutString( $Data );
 		}
 		
-		if( $Flags & 0x20 ) // The game tag data string for the server
+		// The game tag data string for the server
+		if( $Flags & 0x20 )
 		{
-			$Server[ 'EDF' ][ 'GameTags' ] = $this->_CutString( $Buffer );
+			$Server[ 'EDF' ][ 'GameTags' ] = $this->_CutString( $Data );
 		}
 		
-		/*if( $Flags & 0x01 ) // The Steam Application ID again + several 0x00 bytes
-			$this->_UnPack( 'S', $this->_CutByte( $Buffer, 2 ) );
-		*/
+		// The Steam Application ID again + several 0x00 bytes
+	/*	if( $Flags & 0x01 )
+		{
+			$this->_UnPack( 'S', $this->_CutByte( $Data, 2 ) );
+		}	*/
 		
 		return $Server;
 	}
@@ -206,14 +237,14 @@ class SourceQuery
 		}
 		
 		$this->WriteData( 'U' . $Challenge );
-		$Buffer = $this->ReadData( );
+		$Data = $this->ReadData( );
 		
-		if( $this->_CutByte( $Buffer, 5 ) != "\xFF\xFF\xFF\xFFD" )
+		if( $this->_CutByte( $Data, 5 ) != "\xFF\xFF\xFF\xFFD" )
 		{
 			return false;
 		}
 		
-		$Count = $this->_CutNumber( $Buffer );
+		$Count = $this->_CutNumber( $Data );
 		
 		if( $Count <= 0 ) // No players
 		{
@@ -222,11 +253,11 @@ class SourceQuery
 		
 		for( $i = 0; $i < $Count; $i++ )
 		{
-			$this->_CutByte( $Buffer ); // player id, but always equals to 0 (tested on HL1)
+			$this->_CutByte( $Data ); // PlayerID, is it just always 0?
 			
-			$Players[ $i ][ 'Name' ]    = $this->_CutString( $Buffer );
-			$Players[ $i ][ 'Frags' ]   = $this->_UnPack( 'L', $this->_CutByte( $Buffer, 4 ) );
-			$Time                       = (int)$this->_UnPack( 'f', $this->_CutByte( $Buffer, 4 ) );
+			$Players[ $i ][ 'Name' ]    = $this->_CutString( $Data );
+			$Players[ $i ][ 'Frags' ]   = $this->_UnPack( 'L', $this->_CutByte( $Data, 4 ) );
+			$Time                       = (int)$this->_UnPack( 'f', $this->_CutByte( $Data, 4 ) );
 			$Players[ $i ][ 'IntTime' ] = $Time;
 			$Players[ $i ][ 'Time' ]    = GMDate( ( $Time > 3600 ? "H:i:s" : "i:s" ), $Time );
 		}
@@ -249,14 +280,14 @@ class SourceQuery
 		}
 		
 		$this->WriteData( 'V' . $Challenge );
-		$Buffer = $this->ReadData( );
+		$Data = $this->ReadData( );
 		
-		if( $this->_CutByte( $Buffer, 5 ) != "\xFF\xFF\xFF\xFFE" )
+		if( $this->_CutByte( $Data, 5 ) != "\xFF\xFF\xFF\xFFE" )
 		{
 			return false;
 		}
 		
-		$Count = $this->_UnPack( 'S', $this->_CutByte( $Buffer, 2 ) );
+		$Count = $this->_UnPack( 'S', $this->_CutByte( $Data, 2 ) );
 		
 		if( $Count <= 0 ) // Can this even happen?
 		{
@@ -267,33 +298,15 @@ class SourceQuery
 		
 		for( $i = 0; $i < $Count; $i++ )
 		{
-			$Rules[ $this->_CutString( $Buffer ) ] = $this->_CutString( $Buffer );
+			$Rules[ $this->_CutString( $Data ) ] = $this->_CutString( $Data );
 		}
 		
 		return $Rules;
 	}
 	
-	private function GetChallenge( $IsRcon = false )
+	private function GetChallenge( )
 	{
-		if( $IsRcon )
-		{
-			if( $this->RconChallenge )
-			{
-				return $this->RconChallenge;
-			}
-			
-			$this->WriteData( 'challenge rcon' );
-			$Data = $this->ReadData( );
-			
-			if( $this->_CutByte( $Data, 5 ) != "\xFF\xFF\xFF\xFFc" )
-			{
-				return false;
-			}
-			
-			// TODO: Check is RTrim is needed here
-			return ( $this->RconChallenge = RTrim( SubStr( $Data, 14 ) ) );
-		}
-		else if( $this->Challenge )
+		if( $this->Challenge )
 		{
 			return $this->Challenge;
 		}
@@ -303,8 +316,10 @@ class SourceQuery
 		
 		// TODO: \x55 on HLTV just returns server info, breaking other packets...
 		
-		if( $this->_CutByte( $Data, 5 ) != "\xFF\xFF\xFF\xFFA" ) // dproto/hltv will return 'D' not 'A' here
+		if( $this->_CutByte( $Data, 5 ) != "\xFF\xFF\xFF\xFFA" )
 		{
+			// TODO: HLTV, Dproto and old GoldSrc protocol will return 'D' answer not 'A' here
+			
 			return false;
 		}
 		
@@ -313,28 +328,27 @@ class SourceQuery
 	
 	// ==========================================================
 	// RCON
-	public function RconCareless( $Command )
+	public function Rcon( $Command, $DoWeCareAboutResult = true )
 	{
-		if( $this->IsSource || !$this->Connected || !$this->RconPassword || !$this->GetChallenge( true ) )
+		if( !$this->Connected )
 		{
 			return false;
 		}
-		
-		return $this->WriteData( 'rcon ' . $this->RconChallenge . ' "' . $this->RconPassword . '" ' . $Command );
-	}
-	
-	public function Rcon( $Command )
-	{
-		if( $this->IsSource )
+		else if( $this->IsSource )
 		{
 			throw new SQueryException( "Source RCON Protocol is not supported yet." );
 		}
-		else if( !$this->Connected || !$this->RconPassword || !$this->GetChallenge( true ) )
+		else if( !$this->RconPassword || !$this->RconChallenge )
 		{
-			return false;
+			throw new SQueryException( "No rcon password is specified." );
 		}
 		
 		$this->WriteData( 'rcon ' . $this->RconChallenge . ' "' . $this->RconPassword . '" ' . $Command );
+		
+		if( !$DoWeCareAboutResult )
+		{
+			return true;
+		}
 		
 		Socket_Set_TimeOut( $this->Resource, 1 );
 		
