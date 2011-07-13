@@ -20,5 +20,7 @@
 	}
 	catch( SQueryException $e )
 	{
+		$Query->Disconnect( );
+		
 		echo "Error: " . $e->getMessage( );
 	}
