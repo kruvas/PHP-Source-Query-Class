@@ -20,6 +20,7 @@ class SourceQuery
 	protected $Challenge;
 	protected $IsSource;
 	protected $RconId;
+	protected $Temp;
 	
 	public function __destruct( )
 	{
@@ -119,6 +120,22 @@ class SourceQuery
 		
 		$Type = $this->_CutByte( $Data, 5 );
 		$Type = $Type[ 4 ];
+		
+		if( $Type == 'm' )
+		{
+			$this->Temp = $this->ReadData( );
+			
+			if( $this->Temp[ 4 ] == 'I' )
+			{
+				$Data = $this->Temp;
+				$this->Temp = null;
+				
+				$Type = $this->_CutByte( $Data, 5 );
+				$Type = $Type[ 4 ];
+			}
+			
+			// Seriously, don't look at me like this, blame Valve!!
+		}
 		
 		if( $Type == 'm' ) // Old GoldSrc protocol, HLTV still uses it
 		{
@@ -229,15 +246,23 @@ class SourceQuery
 			return false;
 		}
 		
-		$Challenge = $this->GetChallenge( );
+		$Challenge = $this->GetChallenge( 'U' );
 		
-		if( !$Challenge )
+		if( $this->Temp )
+		{
+			$Data = $this->Temp;
+			$this->Temp = null;
+		}
+		else if( !$Challenge )
 		{
 			return false;
 		}
 		
-		$this->WriteData( 'U' . $Challenge );
-		$Data = $this->ReadData( );
+		if( !isset( $Data ) )
+		{
+			$this->WriteData( 'U' . $Challenge );
+			$Data = $this->ReadData( );
+		}
 		
 		if( $this->_CutByte( $Data, 5 ) != "\xFF\xFF\xFF\xFFD" )
 		{
@@ -272,15 +297,23 @@ class SourceQuery
 			return false;
 		}
 		
-		$Challenge = $this->GetChallenge( );
+		$Challenge = $this->GetChallenge( 'V' );
 		
-		if( !$Challenge )
+		if( $this->Temp )
+		{
+			$Data = $this->Temp;
+			$this->Temp = null;
+		}
+		else if( !$Challenge )
 		{
 			return false;
 		}
 		
-		$this->WriteData( 'V' . $Challenge );
-		$Data = $this->ReadData( );
+		if( !isset( $Data ) )
+		{
+			$this->WriteData( 'V' . $Challenge );
+			$Data = $this->ReadData( );
+		}
 		
 		if( $this->_CutByte( $Data, 5 ) != "\xFF\xFF\xFF\xFFE" )
 		{
@@ -304,26 +337,17 @@ class SourceQuery
 		return $Rules;
 	}
 	
-	private function GetChallenge( )
+	public function GetChallenge( $Char )
 	{
 		if( $this->Challenge )
 		{
 			return $this->Challenge;
 		}
 		
-		$this->WriteData( "\x55\xFF\xFF\xFF\xFF" );
-		$Data = $this->ReadData( );
+		$this->WriteData( "{$Char}\xFF\xFF\xFF\xFF" );
+		$Data = $this->Temp = $this->ReadData( );
 		
-		// TODO: \x55 on HLTV just returns server info, breaking other packets...
-		
-		if( $this->_CutByte( $Data, 5 ) != "\xFF\xFF\xFF\xFFA" )
-		{
-			// TODO: HLTV, Dproto and old GoldSrc protocol will return 'D' answer not 'A' here
-			
-			return false;
-		}
-		
-		return ( $this->Challenge = $Data );
+		return $this->Challenge;
 	}
 	
 	// ==========================================================
@@ -403,9 +427,14 @@ class SourceQuery
 				return false;
 		}
 		
-		if( $Data && $Data[ 4 ] == 'l' )
+		if( !$Data )
 		{
-			$Temp = RTrim( SubStr( $Data, 5, 42 ) );
+			return false;
+		}
+		
+		if( $Data[ 4 ] == 'l' )
+		{
+			$Temp = RTrim( SubStr( $Data, 5, 42 ) ); // TODO:
 			
 			if( $Temp == "You have been banned from this server." )
 			{
@@ -413,6 +442,13 @@ class SourceQuery
 				
 				return false;
 			}
+		}
+		else if( $Data[ 4 ] == 'A' && SubStr( $Data, 0, 5 ) == "\xFF\xFF\xFF\xFFA" )
+		{
+			// We got challenge!
+			$this->Challenge = SubStr( $Data, 5 );
+			
+			return false;
 		}
 		
 		return $Data;
