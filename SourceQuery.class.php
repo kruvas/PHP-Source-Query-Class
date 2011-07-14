@@ -337,7 +337,7 @@ class SourceQuery
 		return $Rules;
 	}
 	
-	public function GetChallenge( $Char )
+	private function GetChallenge( $Char )
 	{
 		if( $this->Challenge )
 		{
