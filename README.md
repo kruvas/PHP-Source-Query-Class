@@ -13,22 +13,10 @@ You can find easy example how to use it in `Test.php` file
 
 Functions:
 ----------
-Open connection to a server:
-```php
-Connect( $IP, $Port );
-```
+Open connection to a server: `Connect( $IP, $Port );`
 
-Close connection:
-```php
-Disconnect( );
-```
+Close connection: `Disconnect( );`
 
-Set rcon password for future use:
-```php
-SetRconPassword( $RconPassword );
-```
+Set rcon password for future use: `SetRconPassword( $RconPassword );`
 
-Execute Rcon command:
-```php
-Rcon( $Command );
-```
+Execute Rcon command: `Rcon( $Command );`
