@@ -15,16 +15,20 @@ Functions:
 ----------
 Open connection to a server:
 ```php
-Connect( $IP, $Port );```
+Connect( $IP, $Port );
+```
 
 Close connection:
 ```php
-Disconnect( );```
+Disconnect( );
+```
 
 Set rcon password for future use:
 ```php
-SetRconPassword( $RconPassword );```
+SetRconPassword( $RconPassword );
+```
 
 Execute Rcon command:
 ```php
-Rcon( $Command );```
+Rcon( $Command );
+```
