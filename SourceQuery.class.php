@@ -121,19 +121,24 @@ class SourceQuery
 		$Type = $this->_CutByte( $Data, 5 );
 		$Type = $Type[ 4 ];
 		
-		if( $Type == 'm' )
+		if( $Type == 'm' )//S2A_INFO GoldSource format (obsolete)
 		{
 			$this->Temp = $this->ReadData( );
-			
-			if( $this->Temp[ 4 ] == 'I' )
+
+                    if( $this->Temp[ 4 ] == 'D' )//S2A_PLAYER packet, ignore/drop it, read next packet 
+			{ // used in DProto: 3 packets in a row:
+                          // obsolete S2A_INFO GoldSource, S2A_PLAYER, modern S2A_INFO Source 
+                        $this->Temp = $this->ReadData( );
+                    }
+
+                    if( $this->Temp[ 4 ] == 'I' )//S2A_INFO Source format (modern)
 			{
 				$Data = $this->Temp;
-				$this->Temp = null;
-				
 				$Type = $this->_CutByte( $Data, 5 );
 				$Type = $Type[ 4 ];
 			}
-			
+			$this->Temp = null;
+
 			// Seriously, don't look at me like this, blame Valve!!
 		}
 		
