@@ -89,7 +89,7 @@ class SourceQuery
 		{
 			$this->Connected = false;
 			
-			FClose( $this->Resource );
+			fclose( $this->Resource );
 		}
 	}
 	
