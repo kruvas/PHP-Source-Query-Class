@@ -530,7 +530,9 @@ class SourceQuery
 		}
 		else
 		{
-			$String = $this->_CutByte( $Buffer, ++$Length );
+			$String = $this->_CutByte( $Buffer, $Length );
+			// remove null-byte (terminate for string) from buffer
+			$this->_CutByte( $Buffer, 1 );
 		}
 		
 		return $String;
