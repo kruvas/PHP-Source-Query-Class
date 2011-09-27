@@ -408,8 +408,8 @@ class SourceQuery
 	private function WriteData( $Command )
 	{
 		$Command = "\xFF\xFF\xFF\xFF" . $Command . "\x00";
-		
-		return !!( !FWrite( $this->Resource, $Command, StrLen( $Command ) ) );
+		// return result of write - if failed or write not all bytes  return false, else - true
+		return StrLen( $Command ) !== fwrite( $this->Resource, $Command, StrLen( $Command ) );
 	}
 	
 	private function ReadData( )
